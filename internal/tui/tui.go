@@ -297,7 +297,7 @@ func (t *TUI) renderStartup() string {
 	// Title
 	title := "╔══════════════════════════════════════╗"
 	lines = append(lines, t.centerText(title, width))
-	lines = append(lines, t.centerText("║     tuidit - Terminal Code Editor     ║", width))
+	lines = append(lines, t.centerText("║    tuidit - Terminal Code Editor     ║", width))
 	lines = append(lines, t.centerText("╚══════════════════════════════════════╝", width))
 	lines = append(lines, "")
 	

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	
+
 	tea "github.com/charmbracelet/bubbletea"
 	"tuidit/internal/model"
 	"tuidit/internal/tui"
