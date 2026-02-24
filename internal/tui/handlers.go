@@ -18,48 +18,13 @@ func (t *TUI) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if t.State.Dialog.Type != model.DialogNone {
 		return t.handleDialogInput(msg)
 	}
-	
-	// Handle startup screen
-	if t.State.ShowStartup {
-		return t.handleStartupInput(msg)
-	}
-	
+
 	// Handle input based on current mode and focus
 	switch t.State.FocusPanel {
 	case model.PanelExplorer:
 		return t.handleExplorerInput(msg)
 	case model.PanelEditor:
 		return t.handleEditorInput(msg)
-	}
-	
-	return t, nil
-}
-
-// handleStartupInput handles startup screen input
-func (t *TUI) handleStartupInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "1":
-		// Open directory dialog
-		t.State.Dialog.Type = model.DialogOpenDir
-		t.dialogInput = "/"
-		t.updateDialogPreview()
-		t.State.ShowStartup = false
-		
-	case "2":
-		// Open file dialog
-		t.State.Dialog.Type = model.DialogOpenFile
-		t.dialogInput = "/"
-		t.updateDialogPreview()
-		t.State.ShowStartup = false
-		
-	case "3":
-		// New file - open empty editor
-		t.State.ShowStartup = false
-		t.State.FocusPanel = model.PanelEditor
-		t.State.Mode = model.ModeInsert
-		
-	case "q", "Q", "ctrl+c", "ctrl+q":
-		return t, tea.Quit
 	}
 	
 	return t, nil

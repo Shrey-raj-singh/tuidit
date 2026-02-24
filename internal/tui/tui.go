@@ -148,11 +148,6 @@ func (t *TUI) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return t, nil
 	}
 	
-	// Don't handle mouse during startup
-	if t.State.ShowStartup {
-		return t, nil
-	}
-	
 	// Calculate panel boundaries
 	explorerWidth := t.State.ExplorerWidth
 	editorStartX := explorerWidth + 2 // Account for borders
@@ -270,95 +265,11 @@ func (t *TUI) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 // View renders the TUI
 func (t *TUI) View() string {
-	if t.State.ShowStartup {
-		return t.renderStartup()
-	}
-	
 	if t.State.Dialog.Type != model.DialogNone {
 		return t.renderMainWithDialog()
 	}
 	
 	return t.renderMain()
-}
-
-// Startup screen styles
-var (
-	startupTitleStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("#7C3AED")).
-				MarginBottom(1)
-
-	startupBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7C3AED")).
-			Padding(2, 4).
-			Margin(1, 0).
-			Background(lipgloss.Color("#1E1E2E"))
-
-	startupOptionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#E2E8F0")).
-				PaddingLeft(2)
-
-	startupKeyStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#7C3AED")).
-			Padding(0, 1)
-
-	startupHintStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#6B7280")).
-				MarginTop(1)
-)
-
-// renderStartup renders the startup screen
-func (t *TUI) renderStartup() string {
-	width := t.State.Width
-	height := t.State.Height
-	if width < 50 {
-		width = 50
-	}
-	if height < 20 {
-		height = 20
-	}
-
-	// Title
-	title := startupTitleStyle.Render("tuidit")
-	subtitle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9CA3AF")).Render("Terminal code editor")
-
-	// Menu options with styled keys
-	options := []struct{ key, label string }{
-		{"1", "Open directory"},
-		{"2", "Open file"},
-		{"3", "New file (empty editor)"},
-		{"Q", "Quit"},
-	}
-	var optionLines []string
-	for _, o := range options {
-		key := startupKeyStyle.Render(o.key + ".")
-		line := startupOptionStyle.Render(key + "  " + o.label)
-		optionLines = append(optionLines, line)
-	}
-	menuContent := strings.Join(optionLines, "\n")
-	menuBox := startupBoxStyle.Render(menuContent)
-
-	// Hint
-	hint := startupHintStyle.Render("Press 1, 2, 3, or Q to continue")
-
-	// Status line
-	statusLine := ""
-	if t.State.StatusMessage != "" {
-		statusLine = "\n" + startupHintStyle.Render(t.State.StatusMessage)
-	}
-
-	// Assemble and center in view
-	block := strings.Join([]string{
-		title,
-		subtitle,
-		"",
-		menuBox,
-		hint,
-		statusLine,
-	}, "\n")
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, block)
 }
 
 // centerText centers text within width
@@ -370,14 +281,27 @@ func (t *TUI) centerText(text string, width int) string {
 	return strings.Repeat(" ", padding) + text
 }
 
+// minTermWidth/Height avoid zero or negative dimensions before first resize
+const minTermWidth = 80
+const minTermHeight = 24
+
 // renderMain renders the main editor view
 func (t *TUI) renderMain() string {
 	width := t.State.Width
 	height := t.State.Height
-	
+	if width < minTermWidth {
+		width = minTermWidth
+	}
+	if height < minTermHeight {
+		height = minTermHeight
+	}
+
 	// Calculate panel widths
 	explorerWidth := t.State.ExplorerWidth
 	editorWidth := width - explorerWidth - 3
+	if editorWidth < 10 {
+		editorWidth = 10
+	}
 	
 	// Render panels
 	explorerPanel := t.renderExplorer(explorerWidth, height-4)
@@ -684,10 +608,13 @@ func (t *TUI) renderHelpBar(width int) string {
 		}
 	}
 	
+	const minHelpWidth = 40
+	if width < minHelpWidth {
+		width = minHelpWidth
+	}
 	if len(help) > width {
 		help = help[:width-3] + "..."
 	}
-	
 	return helpStyle.Width(width).Render(help)
 }
 

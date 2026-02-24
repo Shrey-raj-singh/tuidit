@@ -57,7 +57,7 @@ func NewAppState() *AppState {
 		FocusPanel:    PanelExplorer,
 		Buffers:       make([]*EditorBuffer, 0),
 		ExplorerWidth: 30,
-		ShowStartup:   true,
+		ShowStartup:   false,
 		Dialog: Dialog{
 			Type: DialogNone,
 		},
