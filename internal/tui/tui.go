@@ -281,48 +281,84 @@ func (t *TUI) View() string {
 	return t.renderMain()
 }
 
+// Startup screen styles
+var (
+	startupTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#7C3AED")).
+				MarginBottom(1)
+
+	startupBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7C3AED")).
+			Padding(2, 4).
+			Margin(1, 0).
+			Background(lipgloss.Color("#1E1E2E"))
+
+	startupOptionStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#E2E8F0")).
+				PaddingLeft(2)
+
+	startupKeyStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7C3AED")).
+			Padding(0, 1)
+
+	startupHintStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#6B7280")).
+				MarginTop(1)
+)
+
 // renderStartup renders the startup screen
 func (t *TUI) renderStartup() string {
 	width := t.State.Width
 	height := t.State.Height
-	
-	// Center the startup menu
-	lines := make([]string, 0)
-	
-	// Add padding
-	for i := 0; i < height/3; i++ {
-		lines = append(lines, "")
+	if width < 50 {
+		width = 50
 	}
-	
+	if height < 20 {
+		height = 20
+	}
+
 	// Title
-	title := "╔══════════════════════════════════════╗"
-	lines = append(lines, t.centerText(title, width))
-	lines = append(lines, t.centerText("║    tuidit - Terminal Code Editor     ║", width))
-	lines = append(lines, t.centerText("╚══════════════════════════════════════╝", width))
-	lines = append(lines, "")
-	
-	// Options
-	options := []string{
-		"[1] Open Directory",
-		"[2] Open File",
-		"[3] New File (Empty Editor)",
-		"[Q] Quit",
+	title := startupTitleStyle.Render("tuidit")
+	subtitle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9CA3AF")).Render("Terminal code editor")
+
+	// Menu options with styled keys
+	options := []struct{ key, label string }{
+		{"1", "Open directory"},
+		{"2", "Open file"},
+		{"3", "New file (empty editor)"},
+		{"Q", "Quit"},
 	}
-	
-	for _, opt := range options {
-		lines = append(lines, t.centerText(opt, width))
+	var optionLines []string
+	for _, o := range options {
+		key := startupKeyStyle.Render(o.key + ".")
+		line := startupOptionStyle.Render(key + "  " + o.label)
+		optionLines = append(optionLines, line)
 	}
-	
-	lines = append(lines, "")
-	lines = append(lines, t.centerText("Press 1, 2, 3, or Q to continue", width))
-	
-	// Status
+	menuContent := strings.Join(optionLines, "\n")
+	menuBox := startupBoxStyle.Render(menuContent)
+
+	// Hint
+	hint := startupHintStyle.Render("Press 1, 2, 3, or Q to continue")
+
+	// Status line
+	statusLine := ""
 	if t.State.StatusMessage != "" {
-		lines = append(lines, "")
-		lines = append(lines, t.centerText(t.State.StatusMessage, width))
+		statusLine = "\n" + startupHintStyle.Render(t.State.StatusMessage)
 	}
-	
-	return strings.Join(lines, "\n")
+
+	// Assemble and center in view
+	block := strings.Join([]string{
+		title,
+		subtitle,
+		"",
+		menuBox,
+		hint,
+		statusLine,
+	}, "\n")
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, block)
 }
 
 // centerText centers text within width
