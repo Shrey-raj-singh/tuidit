@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"tuidit/internal/config"
 	"tuidit/internal/model"
 	"tuidit/internal/tui"
 	"tuidit/internal/utils"
@@ -14,14 +15,17 @@ import (
 func main() {
 	// Parse command line arguments
 	var startPath string
-	
 	if len(os.Args) > 1 {
 		startPath = os.Args[1]
 	}
-	
+	// If no path given, try to open last used workspace (like VS Code / Cursor)
+	if startPath == "" {
+		startPath = config.GetLastWorkspace()
+	}
+
 	// Create TUI application
 	app := tui.NewTUI()
-	
+
 	// If a path is provided, try to open it
 	if startPath != "" {
 		expanded := utils.ExpandPath(startPath)
@@ -39,9 +43,9 @@ func main() {
 		}
 		
 		// Set up the app based on path type
-		app.State.ShowStartup = false
 		app.State.RootPath = absPath
-		
+		_ = config.SaveLastWorkspace(absPath)
+
 		if info.IsDir() {
 			// Open directory
 			if err := app.FileTree.LoadDirectory(absPath); err != nil {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
+	"tuidit/internal/config"
 	"tuidit/internal/editor"
 	"tuidit/internal/model"
 	"tuidit/internal/utils"
@@ -731,7 +732,8 @@ func (t *TUI) openDirectory(path string) (tea.Model, tea.Cmd) {
 	t.selectedIndex = 0
 	t.State.Dialog.Type = model.DialogNone
 	t.State.FocusPanel = model.PanelExplorer
-	
+	_ = config.SaveLastWorkspace(expanded)
+
 	return t, nil
 }
 
@@ -801,7 +803,8 @@ func (t *TUI) openFile(path string) (tea.Model, tea.Cmd) {
 	t.State.Dialog.Type = model.DialogNone
 	t.State.FocusPanel = model.PanelEditor
 	t.State.Mode = model.ModeNormal
-	
+	_ = config.SaveLastWorkspace(expanded)
+
 	return t, nil
 }
 
