@@ -346,6 +346,12 @@ func (t *TUI) confirmDialogNo() (tea.Model, tea.Cmd) {
 
 // handleExplorerInput handles file explorer input
 func (t *TUI) handleExplorerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if t.FileTree.Root != nil {
+		t.visibleNodes = t.FileTree.GetVisibleNodes()
+		if t.selectedIndex >= len(t.visibleNodes) && len(t.visibleNodes) > 0 {
+			t.selectedIndex = len(t.visibleNodes) - 1
+		}
+	}
 	switch msg.String() {
 	case "up", "k":
 		t.moveSelectionUp()
@@ -424,10 +430,38 @@ func (t *TUI) handleExplorerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.State.Dialog.Type = model.DialogOpenDir
 		t.dialogInput = "/"
 		t.updateDialogPreview()
-		
-	case "ctrl+q", "ctrl+c":
+
+	case "ctrl+x":
+		// Cut
+		if t.FileTree.Root != nil && t.selectedIndex < len(t.visibleNodes) {
+			node := t.visibleNodes[t.selectedIndex]
+			if node != t.FileTree.Root {
+				t.clipboardPath = node.Path
+				t.clipboardCut = true
+				t.State.StatusMessage = "Cut: " + node.Name
+			}
+		}
+
+	case "ctrl+c":
+		// Copy
+		if t.FileTree.Root != nil && t.selectedIndex < len(t.visibleNodes) {
+			node := t.visibleNodes[t.selectedIndex]
+			if node != t.FileTree.Root {
+				t.clipboardPath = node.Path
+				t.clipboardCut = false
+				t.State.StatusMessage = "Copied: " + node.Name
+			}
+		}
+
+	case "ctrl+v":
+		// Paste
+		if t.clipboardPath != "" {
+			return t.pasteFromClipboard()
+		}
+
+	case "ctrl+q", "ctrl+shift+q":
 		return t, tea.Quit
-		
+
 	case "r":
 		// Refresh
 		if t.FileTree.Root != nil {
@@ -714,6 +748,99 @@ func (t *TUI) openSelected() (tea.Model, tea.Cmd) {
 		t.State.Mode = model.ModeNormal
 	}
 	
+	return t, nil
+}
+
+// getPasteDestDir returns the directory where paste should put the item (selected folder, or parent of selected file, or tree root).
+func (t *TUI) getPasteDestDir() string {
+	if t.FileTree.Root == nil {
+		return ""
+	}
+	if t.selectedIndex < 0 || t.selectedIndex >= len(t.visibleNodes) {
+		return t.FileTree.RootPath
+	}
+	node := t.visibleNodes[t.selectedIndex]
+	if node.Type == model.FileTypeDirectory {
+		return node.Path
+	}
+	if node.Parent != nil {
+		return node.Parent.Path
+	}
+	return t.FileTree.RootPath
+}
+
+func (t *TUI) pasteFromClipboard() (tea.Model, tea.Cmd) {
+	destDir := t.getPasteDestDir()
+	if destDir == "" {
+		return t, nil
+	}
+	name := filepath.Base(t.clipboardPath)
+	destPath := filepath.Join(destDir, name)
+	if destPath == t.clipboardPath {
+		t.State.StatusMessage = "Cannot paste into same location"
+		return t, nil
+	}
+	// Prevent copying a directory into itself or its subtree
+	if !t.clipboardCut {
+		clipAbs, _ := filepath.Abs(t.clipboardPath)
+		destAbs, _ := filepath.Abs(destPath)
+		if strings.HasPrefix(destAbs+string(filepath.Separator), clipAbs+string(filepath.Separator)) {
+			t.State.StatusMessage = "Cannot copy folder into itself"
+			return t, nil
+		}
+	}
+	if _, err := os.Stat(destPath); err == nil {
+		t.State.StatusMessage = "Destination already exists: " + name
+		return t, nil
+	}
+	srcInfo, err := os.Stat(t.clipboardPath)
+	if err != nil {
+		t.State.StatusMessage = "Source no longer exists"
+		t.clipboardPath = ""
+		t.clipboardCut = false
+		return t, nil
+	}
+	if t.clipboardCut {
+		// Move
+		if err := t.FileOps.RenameFile(t.clipboardPath, destPath); err != nil {
+			t.State.StatusMessage = "Move failed: " + err.Error()
+			return t, nil
+		}
+		if t.Editor.GetFilePath() == t.clipboardPath {
+			t.Editor.Buffer.FilePath = destPath
+			if t.Editor.Buffer.File != nil {
+				t.Editor.Buffer.File.Path = destPath
+				t.Editor.Buffer.File.Name = filepath.Base(destPath)
+			}
+		}
+		t.clipboardPath = ""
+		t.clipboardCut = false
+		t.State.StatusMessage = "Moved: " + name
+	} else {
+		// Copy
+		if srcInfo.IsDir() {
+			if err := t.FileOps.CopyDirectory(t.clipboardPath, destPath); err != nil {
+				t.State.StatusMessage = "Copy failed: " + err.Error()
+				return t, nil
+			}
+		} else {
+			if err := t.FileOps.CopyFile(t.clipboardPath, destPath); err != nil {
+				t.State.StatusMessage = "Copy failed: " + err.Error()
+				return t, nil
+			}
+		}
+		t.State.StatusMessage = "Copied: " + name
+	}
+	if t.FileTree.Root != nil {
+		t.FileTree.Refresh()
+		t.visibleNodes = t.FileTree.GetVisibleNodes()
+		for i, node := range t.visibleNodes {
+			if node.Path == destPath {
+				t.selectedIndex = i
+				break
+			}
+		}
+	}
 	return t, nil
 }
 

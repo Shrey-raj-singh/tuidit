@@ -101,7 +101,11 @@ type TUI struct {
 	dialogMessage       string
 	dialogError         string
 	dialogPreviewScroll int
-	
+
+	// Clipboard for cut/copy/paste (explorer)
+	clipboardPath string
+	clipboardCut  bool
+
 	// Mouse state for double-click detection
 	lastClickTime  int64 // Unix nanoseconds
 	lastClickX     int
@@ -599,7 +603,7 @@ func (t *TUI) renderHelpBar(width int) string {
 	help := ""
 	
 	if t.State.FocusPanel == model.PanelExplorer {
-		help = "Enter: Open/Expand | Backspace: Collapse | n: New File | N: New Folder | F2: Rename | Del: Delete | Tab: Focus Editor | Ctrl+Q: Quit"
+		help = "Enter: Open/Expand | n: New File | N: New Folder | F2: Rename | Del: Delete | Ctrl+X: Cut | Ctrl+C: Copy | Ctrl+V: Paste | Tab: Focus Editor | Ctrl+Q: Quit"
 	} else if t.State.FocusPanel == model.PanelEditor {
 		if t.State.Mode == model.ModeInsert {
 			help = "Esc: Normal Mode | Ctrl+S: Save | Ctrl+Q: Quit"

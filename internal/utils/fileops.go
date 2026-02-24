@@ -129,6 +129,38 @@ func (f *FileOperations) CopyFile(src, dst string) error {
 	return nil
 }
 
+// CopyDirectory recursively copies a directory to a new location
+func (f *FileOperations) CopyDirectory(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("source directory does not exist: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("source is not a directory: %s", src)
+	}
+	if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return fmt.Errorf("failed to read source directory: %w", err)
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			if err := f.CopyDirectory(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := f.CopyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // IsDirectory checks if a path is a directory
 func (f *FileOperations) IsDirectory(path string) bool {
 	info, err := os.Stat(path)
