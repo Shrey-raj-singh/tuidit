@@ -4,83 +4,141 @@ A terminal UI based CLI code editor written in Go with modular code architecture
 
 ## Features
 
-- **Two Startup Modes**:
-  - Interactive mode: Open editor without selecting any directory/file, then use TUI to open directories or files
-  - Direct mode: Specify a directory or file path via command line argument
-
-- **File Explorer Panel**:
-  - Collapsible folder tree on the left side
-  - Navigate through directories with keyboard
-  - Create, rename, and delete files and folders
-
-- **Editor Panel**:
-  - Full-featured text editing with syntax highlighting support
-  - Vim-like modal editing (Normal/Insert modes)
-  - Line numbers display
-  - Save files with Ctrl+S
+- **Open from anywhere**: Add `tuidit` to your PATH (see [Use from anywhere](#use-from-anywhere)) and run `tuidit` from any directory.
+- **Last workspace**: Automatically reopens the last used directory when you run `tuidit` with no arguments (like VS Code/Cursor).
+- **File Explorer Panel**: Collapsible folder tree, navigate with keyboard, create/rename/delete files and folders, cut/copy/paste, resize panel (Ctrl+Left/Right).
+- **Editor Panel**: Vim-like modal editing (Normal/Insert), line numbers, save with Ctrl+S.
+- **Command guide**: Press **Ctrl+H** anytime to open a context-aware shortcut guide.
 
 ## Installation
 
-### Prerequisites
-- Go 1.21 or higher
+### Pre-built binaries (recommended)
 
-### Build from Source
+- **GitHub Releases** — Download the binary for your platform from the [Releases](https://github.com/Shrey-raj-singh/tuidit/releases) page (Linux amd64/arm64, Windows amd64, macOS amd64/arm64). Extract and add the directory to your PATH.
+
+- **Homebrew** (macOS / Linux):
+  ```bash
+  brew tap Shrey-raj-singh/tuidit https://github.com/Shrey-raj-singh/tuidit
+  brew install tuidit
+  ```
+  Or install the formula from this repo:
+  ```bash
+  brew install Shrey-raj-singh/tuidit/tuidit
+  ```
+
+- **Winget** (Windows) — Once the package is in the [winget-pkgs](https://github.com/microsoft/winget-pkgs) repo:
+  ```powershell
+  winget install ShreyRajSingh.Tuidit
+  ```
+
+### Build from source
+
+**Prerequisites:** Go 1.21 or higher.
 
 ```bash
 go build -o tuidit ./cmd/editor/
 ```
 
-## Usage
+On Windows (executable name can include `.exe`):
 
-### Interactive Mode
-Run without arguments to see the startup menu:
-
-```bash
-./tuidit
+```powershell
+go build -o tuidit.exe ./cmd/editor/
 ```
 
-Options:
-1. Open Directory - Browse and select a directory
-2. Open File - Open a specific file for editing
-3. New File - Start with an empty editor
+### Use from anywhere
 
-### Direct Mode
+Add the directory that contains the `tuidit` (or `tuidit.exe`) binary to your **PATH** so you can run it from any folder.
+
+**Linux / macOS (bash or zsh)**
+
+1. Choose a directory for binaries, e.g. `$HOME/bin` or `/usr/local/bin`.
+2. Build and copy the binary there:
+   ```bash
+   go build -o tuidit ./cmd/editor/
+   mkdir -p ~/bin && mv tuidit ~/bin/
+   ```
+3. Add to PATH in `~/.bashrc` or `~/.zshrc`:
+   ```bash
+   export PATH="$HOME/bin:$PATH"
+   ```
+4. Reload the shell:
+   ```bash
+   source ~/.bashrc   # or source ~/.zshrc
+   ```
+5. Run from anywhere:
+   ```bash
+   tuidit
+   tuidit /path/to/project
+   ```
+
+**Windows (PowerShell)**
+
+1. Build the binary (e.g. in your project folder):
+   ```powershell
+   go build -o tuidit.exe ./cmd/editor/
+   ```
+2. Pick a folder that will be on PATH (e.g. `C:\Tools` or a folder you created). Copy `tuidit.exe` there.
+3. Add that folder to your user PATH:
+   - Open **Settings** → **System** → **About** → **Advanced system settings** → **Environment Variables**.
+   - Under **User variables**, select **Path** → **Edit** → **New**, and add the folder (e.g. `C:\Tools`).
+   - Confirm with **OK**.
+4. Restart the terminal (or open a new one), then run:
+   ```powershell
+   tuidit
+   tuidit C:\path\to\project
+   ```
+
+**Windows (Command Prompt)**
+
+- Same as PowerShell: add the folder containing `tuidit.exe` to the **Path** user variable via **Environment Variables**, then use a new `cmd` window and run `tuidit` from any directory.
+
+## Usage
+
+### With no arguments
+Opens the editor and restores the **last used workspace** (directory) if there was one; otherwise shows an empty explorer. Use **Ctrl+O** to open a folder or file.
+
+```bash
+tuidit
+```
+
+### With a path
 Open a specific directory or file:
 
 ```bash
 # Open a directory
-./tuidit /path/to/directory
+tuidit /path/to/directory
 
 # Open a file
-./tuidit /path/to/file.go
+tuidit /path/to/file.go
+```
+
+On Windows:
+
+```powershell
+tuidit C:\Users\Me\project
+tuidit .\src\main.go
 ```
 
 ## Keyboard Shortcuts
 
-### Startup Screen
-| Key | Action |
-|-----|--------|
-| `1` | Open Directory |
-| `2` | Open File |
-| `3` | New File (Empty Editor) |
-| `Q` | Quit |
+Press **Ctrl+H** anytime to open the full, context-aware shortcut guide in a popup.
 
-### File Explorer (Normal Mode)
+### File Explorer
 | Key | Action |
 |-----|--------|
-| `↑/k` | Move up |
-| `↓/j` | Move down |
-| `←/h` | Collapse directory |
-| `→/l` | Expand directory |
-| `Enter` | Open file/Expand directory |
-| `n` | Create new file |
-| `N` | Create new folder |
-| `F2` | Rename file/folder |
-| `Del/d` | Delete file/folder |
-| `r` | Refresh directory |
-| `Tab` | Focus editor panel |
-| `Ctrl+O` | Open file/directory dialog |
-| `Ctrl+Q` | Quit |
+| `↑/k` `↓/j` | Move selection |
+| `←/h` `→/l` | Collapse / Expand directory |
+| `Enter` | Open file / Expand directory |
+| `n` `N` | New file / New folder |
+| `F2` | Rename |
+| `Del` `d` | Delete |
+| `Ctrl+X` `Ctrl+C` `Ctrl+V` | Cut / Copy / Paste |
+| `Ctrl+O` | Open file or directory |
+| `Ctrl+Left` `Ctrl+Right` | Resize explorer panel |
+| `Tab` | Focus editor |
+| `r` | Refresh |
+| `Esc` `Ctrl+Q` | Quit |
+| `Ctrl+H` | Open shortcut guide |
 
 ### Editor (Normal Mode)
 | Key | Action |
@@ -106,6 +164,8 @@ Open a specific directory or file:
 | `Ctrl+S` | Save file |
 | `Ctrl+O` | Open file dialog |
 | `Ctrl+N` | New file dialog |
+| `Ctrl+Left` `Ctrl+Right` | Resize explorer panel |
+| `Ctrl+H` | Open shortcut guide |
 | `Ctrl+Q` | Quit |
 
 ### Editor (Insert Mode)
@@ -117,6 +177,7 @@ Open a specific directory or file:
 | `Delete` | Delete character under cursor |
 | `Tab` | Insert tab (4 spaces) |
 | `Ctrl+S` | Save file |
+| `Ctrl+H` | Open shortcut guide |
 | `Ctrl+Q` | Quit |
 
 ## Project Structure

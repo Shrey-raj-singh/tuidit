@@ -1,6 +1,6 @@
-# Binaries
-editor
-tuidit
+# Binaries (root only, so cmd/editor/ is not ignored)
+/editor
+/tuidit
 tuidit.exe
 
 # Go build artifacts

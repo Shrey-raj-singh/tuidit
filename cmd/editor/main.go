@@ -12,7 +12,15 @@ import (
 	"tuidit/internal/utils"
 )
 
+var Version = "0.1.0"
+
 func main() {
+	// Handle --version
+	if len(os.Args) == 2 && (os.Args[1] == "-v" || os.Args[1] == "--version") {
+		fmt.Printf("tuidit %s\n", Version)
+		return
+	}
+
 	// Parse command line arguments
 	var startPath string
 	if len(os.Args) > 1 {

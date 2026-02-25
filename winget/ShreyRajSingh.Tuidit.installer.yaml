@@ -1,0 +1,12 @@
+# Installer manifest for winget-pkgs.
+# Replace InstallerSha256 with the SHA256 of tuidit-windows-amd64.exe from the release.
+# Get it from the release page or: (Get-FileHash -Algorithm SHA256 .\tuidit-windows-amd64.exe).Hash
+PackageIdentifier: ShreyRajSingh.Tuidit
+PackageVersion: 0.1.0
+Installers:
+  - Architecture: x64
+    InstallerType: portable
+    InstallerUrl: https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.0/tuidit-windows-amd64.exe
+    InstallerSha256: REPLACE_WITH_SHA256
+ManifestType: installer
+ManifestVersion: 1.6.0
