@@ -33,6 +33,11 @@ func (t *TUI) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleDialogInput handles dialog input
 func (t *TUI) handleDialogInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Help overlay: any key closes it
+	if t.State.Dialog.Type == model.DialogHelp {
+		t.State.Dialog.Type = model.DialogNone
+		return t, nil
+	}
 	switch msg.String() {
 	case "esc":
 		t.State.Dialog.Type = model.DialogNone
@@ -431,6 +436,13 @@ func (t *TUI) handleExplorerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		t.dialogInput = "/"
 		t.updateDialogPreview()
 
+	case "ctrl+right":
+		// Widen explorer
+		t.resizeExplorerWidth(3)
+	case "ctrl+left":
+		// Narrow explorer
+		t.resizeExplorerWidth(-3)
+
 	case "ctrl+x":
 		// Cut
 		if t.FileTree.Root != nil && t.selectedIndex < len(t.visibleNodes) {
@@ -459,7 +471,11 @@ func (t *TUI) handleExplorerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return t.pasteFromClipboard()
 		}
 
-	case "ctrl+q", "ctrl+shift+q":
+	case "ctrl+h":
+		// Show full command guide (popup)
+		t.State.Dialog.Type = model.DialogHelp
+
+	case "ctrl+q", "ctrl+shift+q", "esc":
 		return t, tea.Quit
 
 	case "r":
@@ -526,6 +542,10 @@ func (t *TUI) handleEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			
 		case "tab":
 			t.Editor.InsertChar('\t')
+
+		case "ctrl+h":
+			t.State.Dialog.Type = model.DialogHelp
+			return t, nil
 			
 		default:
 			// Insert character
@@ -631,6 +651,15 @@ func (t *TUI) handleEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		
 	case "tab":
 		t.State.FocusPanel = model.PanelExplorer
+
+	case "ctrl+right":
+		t.resizeExplorerWidth(3)
+	case "ctrl+left":
+		t.resizeExplorerWidth(-3)
+
+	case "ctrl+h":
+		// Show full command guide (popup)
+		t.State.Dialog.Type = model.DialogHelp
 		
 	case "ctrl+s":
 		if t.Editor.Buffer != nil {
@@ -663,6 +692,27 @@ func (t *TUI) handleEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	
 	return t, nil
+}
+
+// resizeExplorerWidth changes the explorer panel width by delta (positive = wider, negative = narrower).
+func (t *TUI) resizeExplorerWidth(delta int) {
+	const minExplorerWidth = 15
+	maxExplorerWidth := 60
+	if t.State.Width > 0 {
+		if m := t.State.Width - 3 - 20; m < maxExplorerWidth {
+			maxExplorerWidth = m
+		}
+	}
+	if maxExplorerWidth < minExplorerWidth {
+		maxExplorerWidth = minExplorerWidth
+	}
+	t.State.ExplorerWidth += delta
+	if t.State.ExplorerWidth < minExplorerWidth {
+		t.State.ExplorerWidth = minExplorerWidth
+	}
+	if t.State.ExplorerWidth > maxExplorerWidth {
+		t.State.ExplorerWidth = maxExplorerWidth
+	}
 }
 
 // Navigation helpers

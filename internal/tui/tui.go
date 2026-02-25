@@ -603,12 +603,12 @@ func (t *TUI) renderHelpBar(width int) string {
 	help := ""
 	
 	if t.State.FocusPanel == model.PanelExplorer {
-		help = "Enter: Open/Expand | n: New File | N: New Folder | F2: Rename | Del: Delete | Ctrl+X: Cut | Ctrl+C: Copy | Ctrl+V: Paste | Tab: Focus Editor | Ctrl+Q: Quit"
+		help = "Enter: Open/Expand | n/N: New | F2: Rename | Del | Ctrl+X/C/V | Ctrl+←→: Resize | Ctrl+H: Guide | Tab: Editor | Esc/Ctrl+Q: Quit"
 	} else if t.State.FocusPanel == model.PanelEditor {
 		if t.State.Mode == model.ModeInsert {
-			help = "Esc: Normal Mode | Ctrl+S: Save | Ctrl+Q: Quit"
+			help = "Esc: Normal | Ctrl+S: Save | Ctrl+H: Guide | Ctrl+Q: Quit"
 		} else {
-			help = "i: Insert | a: Append | o: New Line | d: Delete Line | Ctrl+S: Save | Tab: Focus Explorer | Ctrl+Q: Quit"
+			help = "i a o: Insert/Append/Line | d: Delete Line | Ctrl+S: Save | Ctrl+←→: Resize | Ctrl+H: Guide | Tab: Explorer | Ctrl+Q: Quit"
 		}
 	}
 	
@@ -620,6 +620,76 @@ func (t *TUI) renderHelpBar(width int) string {
 		help = help[:width-3] + "..."
 	}
 	return helpStyle.Width(width).Render(help)
+}
+
+// renderHelpGuide returns the command guide for the Ctrl+H popup (dynamic by focus and mode, like bottom bar)
+func (t *TUI) renderHelpGuide() string {
+	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7C3AED"))
+	currentTitle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7C3AED")).Background(lipgloss.Color("#2D3748"))
+	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#60A5FA"))
+
+	explorerLines := []string{
+		"  " + keyStyle.Render("Enter") + "  Open file / Expand folder",
+		"  " + keyStyle.Render("↑↓ j k") + "  Move selection",
+		"  " + keyStyle.Render("← h  → l") + "  Collapse / Expand",
+		"  " + keyStyle.Render("n  N") + "  New file / folder",
+		"  " + keyStyle.Render("F2") + "  Rename  " + keyStyle.Render("Del d") + "  Delete",
+		"  " + keyStyle.Render("Ctrl+X C V") + "  Cut / Copy / Paste",
+		"  " + keyStyle.Render("Ctrl+O") + "  Open  " + keyStyle.Render("Tab") + "  Focus editor  " + keyStyle.Render("r") + "  Refresh",
+		"  " + keyStyle.Render("Ctrl+←") + " / " + keyStyle.Render("Ctrl+→") + "  Resize explorer panel",
+		"  " + keyStyle.Render("Esc") + "  or  " + keyStyle.Render("Ctrl+Q") + "  Quit",
+	}
+	editorNormalLines := []string{
+		"  " + keyStyle.Render("i a o O") + "  Insert / Append / New line",
+		"  " + keyStyle.Render("d") + "  Delete line  " + keyStyle.Render("x X") + "  Delete char",
+		"  " + keyStyle.Render("↑↓ j k  ← →") + "  Move cursor",
+		"  " + keyStyle.Render("0 $  w b  g G") + "  Line / word / first–last line",
+		"  " + keyStyle.Render("Ctrl+S") + "  Save  " + keyStyle.Render("Ctrl+O N") + "  Open / New file",
+		"  " + keyStyle.Render("Ctrl+← →") + "  Resize explorer  " + keyStyle.Render("Tab") + "  Focus explorer",
+	}
+	editorInsertLines := []string{
+		"  " + keyStyle.Render("Esc") + "  Normal mode",
+		"  " + keyStyle.Render("Ctrl+S") + "  Save  " + keyStyle.Render("Ctrl+Q") + "  Quit",
+	}
+	generalLines := []string{
+		"  " + keyStyle.Render("Ctrl+H") + "  This guide  " + keyStyle.Render("Esc") + " / " + keyStyle.Render("Ctrl+Q") + "  Quit",
+	}
+
+	var out []string
+	add := func(title string, isCurrent bool, section []string) {
+		if isCurrent {
+			out = append(out, currentTitle.Render(" ▶ "+title+" (current) "))
+		} else {
+			out = append(out, sectionTitle.Render(title))
+		}
+		out = append(out, section...)
+		out = append(out, "")
+	}
+
+	// Order: current context first (like bottom suggestions), then others
+	switch t.State.FocusPanel {
+	case model.PanelExplorer:
+		add("Explorer", true, explorerLines)
+		add("Editor (normal)", false, editorNormalLines)
+		add("Editor (insert)", false, editorInsertLines)
+	case model.PanelEditor:
+		if t.State.Mode == model.ModeInsert {
+			add("Editor (insert)", true, editorInsertLines)
+			add("Explorer", false, explorerLines)
+			add("Editor (normal)", false, editorNormalLines)
+		} else {
+			add("Editor (normal)", true, editorNormalLines)
+			add("Explorer", false, explorerLines)
+			add("Editor (insert)", false, editorInsertLines)
+		}
+	default:
+		add("Explorer", false, explorerLines)
+		add("Editor (normal)", false, editorNormalLines)
+		add("Editor (insert)", false, editorInsertLines)
+	}
+	out = append(out, sectionTitle.Render("General"))
+	out = append(out, generalLines...)
+	return strings.Join(out, "\n")
 }
 
 // renderDialog renders a dialog box
@@ -771,13 +841,18 @@ func (t *TUI) renderDialog() string {
 		} else {
 			content = "Quit\n\nPress Y to confirm, N to cancel"
 		}
-		
+
+	case model.DialogHelp:
+		content = t.renderHelpGuide()
+
 	default:
 		content = "Dialog"
 	}
 	
 	// Update help text based on dialog type
-	if t.State.Dialog.Type == model.DialogOpenDir {
+	if t.State.Dialog.Type == model.DialogHelp {
+		content += "\n\n" + helpStyle.Render("Press any key or Esc to close")
+	} else if t.State.Dialog.Type == model.DialogOpenDir {
 		content += "\n\n[Enter: Select Current Path] [Right/L: Navigate Into] [Tab: Complete] [↑↓: Navigate] [Esc: Cancel]"
 	} else if t.State.Dialog.Type == model.DialogOpenFile {
 		content += "\n\n[Enter: Open/Select] [Right/L: Navigate Into Dir] [Tab: Complete] [↑↓: Navigate] [Esc: Cancel]"
