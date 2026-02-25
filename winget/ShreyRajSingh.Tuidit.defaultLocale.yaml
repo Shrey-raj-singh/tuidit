@@ -4,6 +4,7 @@ PackageVersion: 0.1.0
 PackageLocale: en-US
 Publisher: Shrey Raj Singh
 PackageName: tuidit
+Moniker: tuidit
 License: MIT
 ShortDescription: Terminal UI code editor with file explorer and vim-like editing.
 ManifestType: defaultLocale

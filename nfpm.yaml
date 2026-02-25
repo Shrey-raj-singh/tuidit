@@ -1,0 +1,14 @@
+# nFPM config for building .deb packages. ARCH and VERSION are set in CI.
+name: tuidit
+version: ${VERSION}
+arch: ${ARCH}
+platform: linux
+section: editors
+priority: optional
+maintainer: "Shrey Raj Singh"
+description: Terminal UI code editor with file explorer and vim-like editing.
+homepage: https://github.com/Shrey-raj-singh/tuidit
+license: MIT
+contents:
+  - src: dist/tuidit-linux-${ARCH}
+    dst: /usr/bin/tuidit

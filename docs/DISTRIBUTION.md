@@ -61,10 +61,22 @@ The formula is in `Formula/tuidit.rb`. To publish via a **tap**:
 
 ## 4. APT (Debian/Ubuntu)
 
-There is no automated APT repo in this project yet. Options:
+The release workflow already:
 
-- **Build .deb in CI**: Add a job in the release workflow (or a separate workflow) that builds a `.deb` package (e.g. with `nfpm` or a simple `dpkg-deb` layout) and uploads it as a release asset.
-- **Host an APT repo**: Use GitHub Pages or a small server and serve a `dists/` + `pool/` structure; document the `apt-add-repository` and `apt install` steps in the README.
-- **PPA**: Publish the `.deb` to a Launchpad PPA and document the `add-apt-repository` and `apt install` steps.
+1. Builds **.deb** packages (amd64 and arm64) with **nfpm** (`nfpm.yaml`) and uploads them to the GitHub Release.
+2. Generates an **APT repo** (pool + dists) and deploys it to **GitHub Pages** via the “Upload APT repo for GitHub Pages” step and the `deploy-pages` job.
 
-Once you have a .deb and a repo URL, add an “APT” subsection under the README **Installation** section.
+**Requirements:**
+
+- In the repo: **Settings → Pages → Build and deployment**: set **Source** to **GitHub Actions**.
+- After the first tagged release, the APT repo will be at `https://<owner>.github.io/tuidit/` (e.g. `https://shrey-raj-singh.github.io/tuidit/`).
+
+Users add the repo and install with:
+
+```bash
+echo "deb [trusted=yes] https://shrey-raj-singh.github.io/tuidit/ stable main" | sudo tee /etc/apt/sources.list.d/tuidit.list
+sudo apt update
+sudo apt install tuidit
+```
+
+(We use `[trusted=yes]` because the repo is not GPG-signed. To sign the Release file, add GPG signing in the “Generate APT repo” step and document the key install.)
