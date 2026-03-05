@@ -12,7 +12,7 @@ import (
 	"tuidit/internal/utils"
 )
 
-var Version = "0.1.0"
+var Version = "0.1.1"
 
 func main() {
 	// Handle --version

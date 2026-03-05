@@ -5,12 +5,12 @@
 class Tuidit < Formula
   desc "Terminal UI code editor with file explorer and vim-like editing"
   homepage "https://github.com/Shrey-raj-singh/tuidit"
-  version "0.1.0"
+  version "0.1.1"
   license "MIT"
 
   on_macos do
     on_intel do
-      url "https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.0/tuidit-darwin-amd64"
+      url "https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.1/tuidit-darwin-amd64"
       sha256 "REPLACE_WITH_DARWIN_AMD64_SHA256"
     end
     on_arm do
@@ -21,11 +21,11 @@ class Tuidit < Formula
 
   on_linux do
     on_intel do
-      url "https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.0/tuidit-linux-amd64"
+      url "https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.1/tuidit-linux-amd64"
       sha256 "REPLACE_WITH_LINUX_AMD64_SHA256"
     end
     on_arm do
-      url "https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.0/tuidit-linux-arm64"
+      url "https://github.com/Shrey-raj-singh/tuidit/releases/download/v0.1.1/tuidit-linux-arm64"
       sha256 "REPLACE_WITH_LINUX_ARM64_SHA256"
     end
   end

@@ -1,6 +1,6 @@
 # Build and publish multi-platform binaries to GitHub Releases.
 # Also builds .deb and publishes APT repo to GitHub Pages (enable Pages in repo Settings).
-# Trigger: push a tag v* (e.g. v0.1.0)
+# Trigger: push a tag v* (e.g. v0.1.1)
 name: Release
 
 on:
