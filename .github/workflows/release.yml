@@ -53,8 +53,10 @@ jobs:
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           export VERSION
+          cp dist/tuidit-linux-amd64 dist/tuidit-linux
           export ARCH=amd64
           nfpm pkg -f nfpm.yaml -p deb -t dist/
+          cp dist/tuidit-linux-arm64 dist/tuidit-linux
           export ARCH=arm64
           nfpm pkg -f nfpm.yaml -p deb -t dist/
 

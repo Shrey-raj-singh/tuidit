@@ -9,6 +9,7 @@ maintainer: "Shrey Raj Singh"
 description: Terminal UI code editor with file explorer and vim-like editing.
 homepage: https://github.com/Shrey-raj-singh/tuidit
 license: MIT
+# CI copies the binary to dist/tuidit-linux before running nfpm per arch.
 contents:
-  - src: dist/tuidit-linux-${ARCH}
+  - src: dist/tuidit-linux
     dst: /usr/bin/tuidit
