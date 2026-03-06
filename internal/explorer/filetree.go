@@ -5,7 +5,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbletea"
+	"github.com/fsnotify/fsnotify"
 	"tuidit/internal/model"
 )
 
@@ -13,6 +16,10 @@ import (
 type FileTree struct {
 	Root    *model.TreeNode
 	RootPath string
+
+	// watcher for filesystem changes (nil if not watching)
+	watcher *fsnotify.Watcher
+	watchCh chan struct{}
 }
 
 // NewFileTree creates a new file tree
@@ -251,4 +258,84 @@ func IsDirectory(path string) bool {
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// StartWatch starts watching the tree root (and subdirs) for filesystem changes.
+// Sends on watchCh when a change is detected (debounced). Call StopWatch before starting a new watch.
+func (ft *FileTree) StartWatch(rootPath string) error {
+	if rootPath == "" {
+		return nil
+	}
+	ft.StopWatch()
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	ft.watcher = watcher
+	ft.watchCh = make(chan struct{}, 1)
+
+	// Add root and all subdirs
+	_ = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		if info.IsDir() {
+			_ = watcher.Add(path)
+		}
+		return nil
+	})
+
+	go func() {
+		defer close(ft.watchCh)
+		var debounce *time.Timer
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				_ = event
+				if debounce != nil {
+					debounce.Stop()
+				}
+				debounce = time.AfterFunc(150*time.Millisecond, func() {
+					select {
+					case ft.watchCh <- struct{}{}:
+					default:
+					}
+				})
+			case _, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+	return nil
+}
+
+// StopWatch stops the filesystem watcher.
+func (ft *FileTree) StopWatch() {
+	if ft.watcher == nil {
+		return
+	}
+	_ = ft.watcher.Close()
+	ft.watcher = nil
+	ft.watchCh = nil
+}
+
+// WatchCmd returns a Bubble Tea command that completes when a filesystem change is detected.
+// Call this from Init/Update and re-return it after handling DirChangedMsg to keep watching.
+func (ft *FileTree) WatchCmd() tea.Cmd {
+	if ft.watchCh == nil {
+		return nil
+	}
+	ch := ft.watchCh
+	return func() tea.Msg {
+		_, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return model.DirChangedMsg{}
+	}
 }

@@ -1,4 +1,4 @@
-﻿package tui
+package tui
 
 import (
 	"os"
@@ -910,8 +910,9 @@ func (t *TUI) openDirectory(path string) (tea.Model, tea.Cmd) {
 	t.State.Dialog.Type = model.DialogNone
 	t.State.FocusPanel = model.PanelExplorer
 	_ = config.SaveLastWorkspace(expanded)
+	_ = t.FileTree.StartWatch(expanded)
 
-	return t, nil
+	return t, t.FileTree.WatchCmd()
 }
 
 func (t *TUI) openFile(path string) (tea.Model, tea.Cmd) {

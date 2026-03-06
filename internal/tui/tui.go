@@ -126,6 +126,10 @@ func NewTUI() *TUI {
 
 // Init initializes the TUI
 func (t *TUI) Init() tea.Cmd {
+	if t.FileTree.RootPath != "" {
+		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
+		return tea.Sequence(tea.EnterAltScreen, t.FileTree.WatchCmd())
+	}
 	return tea.EnterAltScreen
 }
 
@@ -140,6 +144,11 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		t.State.Width = msg.Width
 		t.State.Height = msg.Height
 		return t, nil
+	case model.DirChangedMsg:
+		_ = t.FileTree.Refresh()
+		// Restart watcher so new subdirs are watched
+		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
+		return t, t.FileTree.WatchCmd()
 	}
 	
 	return t, nil

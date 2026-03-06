@@ -123,3 +123,6 @@ type PendingOperation struct {
 	Target    string
 	Confirmed bool
 }
+
+// DirChangedMsg is sent when the filesystem watcher detects a change (file/dir added, removed, etc.)
+type DirChangedMsg struct{}
