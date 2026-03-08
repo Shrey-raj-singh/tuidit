@@ -1,6 +1,6 @@
 # Locale manifest for winget-pkgs (en-US).
 PackageIdentifier: ShreyRajSingh.Tuidit
-PackageVersion: 0.1.1
+PackageVersion: 0.1.0
 PackageLocale: en-US
 Publisher: Shrey Raj Singh
 PackageName: tuidit
