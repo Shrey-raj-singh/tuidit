@@ -1,6 +1,6 @@
 # Distribution guide
 
-How to publish tuidit to GitHub Releases, Winget, Homebrew, and (optionally) APT.
+How to publish tuidit to GitHub Releases, Winget, Homebrew, APT, and DNF/RPM.
 
 ## 1. GitHub Releases (primary)
 
@@ -81,3 +81,28 @@ sudo apt install tuidit
 ```
 
 (We use `[trusted=yes]` because the repo is not GPG-signed. To sign the Release file, add GPG signing in the “Generate APT repo” step and document the key install.)
+
+## 5. DNF/RPM (Fedora / RHEL / CentOS / Rocky)
+
+The release workflow:
+
+1. Builds **.rpm** packages (x86_64 and aarch64) with **nfpm** (`nfpm.yaml`), same version as the .deb builds.
+2. Generates a **DNF repo** (repodata via `createrepo_c`) under **rpm/x86_64** and **rpm/aarch64**, and deploys it together with the APT repo to **GitHub Pages** (site root contains both `pool`/`dists` and `rpm/`).
+
+**Requirements:**
+
+- Same as APT: **Settings → Pages → Source: GitHub Actions**.
+- After a tagged release, the DNF repo is at `https://shrey-raj-singh.github.io/tuidit/rpm/$basearch` (e.g. `/rpm/x86_64` or `/rpm/aarch64`).
+
+Users add the repo and install with:
+
+```bash
+echo '[tuidit]
+name=tuidit
+baseurl=https://shrey-raj-singh.github.io/tuidit/rpm/$basearch
+enabled=1
+gpgcheck=0' | sudo tee /etc/yum.repos.d/tuidit.repo
+sudo dnf install tuidit
+```
+
+(`gpgcheck=0` because the repo is not GPG-signed. To sign the repo, add RPM signing and set `gpgcheck=1` and document the key.)
