@@ -2,12 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 	"tuidit/internal/config"
 	"tuidit/internal/editor"
 	"tuidit/internal/explorer"
@@ -124,13 +126,29 @@ func NewTUI() *TUI {
 	}
 }
 
+// getSizeCmd returns a command that reads terminal size and sends WindowSizeMsg (so height/width update without calling GetSize in View).
+func getSizeCmd() tea.Cmd {
+	return func() tea.Msg {
+		w, h, err := term.GetSize(int(os.Stdout.Fd()))
+		if err != nil || w <= 0 || h <= 0 {
+			return nil
+		}
+		return tea.WindowSizeMsg{Width: w, Height: h}
+	}
+}
+
+// sizePollInterval is how often we read terminal size so resize is reflected (e.g. when terminal doesn't send WindowSizeMsg).
+const sizePollInterval = 100 * time.Millisecond
+
 // Init initializes the TUI
 func (t *TUI) Init() tea.Cmd {
+	// Get size once at start and start polling so height/width update when user resizes (Windows CMD often doesn't send resize events)
+	sizeTick := tea.Tick(sizePollInterval, func(t time.Time) tea.Msg { return t })
 	if t.FileTree.RootPath != "" {
 		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
-		return tea.Sequence(tea.EnterAltScreen, t.FileTree.WatchCmd())
+		return tea.Sequence(tea.EnterAltScreen, getSizeCmd(), sizeTick, t.FileTree.WatchCmd())
 	}
-	return tea.EnterAltScreen
+	return tea.Sequence(tea.EnterAltScreen, getSizeCmd(), sizeTick)
 }
 
 // Update handles updates
@@ -143,6 +161,30 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		t.State.Width = msg.Width
 		t.State.Height = msg.Height
+		// Keep explorer selection in view when height shrinks
+		t.visibleNodes = t.FileTree.GetVisibleNodes()
+		if len(t.visibleNodes) > 0 {
+			visibleHeight := t.State.Height - 4
+			if visibleHeight < 1 {
+				visibleHeight = 1
+			}
+			if t.selectedIndex >= len(t.visibleNodes) {
+				t.selectedIndex = len(t.visibleNodes) - 1
+			}
+			if t.selectedIndex < 0 {
+				t.selectedIndex = 0
+			}
+			// Clamp TreeScrollY so selected item stays in view
+			if t.selectedIndex < t.State.TreeScrollY {
+				t.State.TreeScrollY = t.selectedIndex
+			}
+			if t.selectedIndex >= t.State.TreeScrollY+visibleHeight {
+				t.State.TreeScrollY = t.selectedIndex - visibleHeight + 1
+			}
+			if t.State.TreeScrollY < 0 {
+				t.State.TreeScrollY = 0
+			}
+		}
 		return t, nil
 	case model.DirChangedMsg:
 		_ = t.FileTree.Refresh()
@@ -156,6 +198,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Restart watcher so new subdirs are watched
 		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
 		return t, t.FileTree.WatchCmd()
+	// Size poll tick: read terminal size so resize is reflected (terminals that don't send WindowSizeMsg, e.g. Windows CMD)
+	case time.Time:
+		return t, tea.Batch(getSizeCmd(), tea.Tick(sizePollInterval, func(t time.Time) tea.Msg { return t }))
 	}
 	
 	return t, nil
@@ -301,11 +346,12 @@ func (t *TUI) centerText(text string, width int) string {
 	return strings.Repeat(" ", padding) + text
 }
 
-// minTermWidth/Height avoid zero or negative dimensions before first resize
-const minTermWidth = 80
-const minTermHeight = 24
+// minTermWidth/Height are the smallest dimensions we use (before first resize or tiny terminals).
+// We use actual terminal size when larger so the UI is not cropped on small terminals.
+const minTermWidth = 40
+const minTermHeight = 6
 
-// renderMain renders the main editor view
+// renderMain renders the main editor view. Size comes from State (updated by WindowSizeMsg or our size-poll tick).
 func (t *TUI) renderMain() string {
 	width := t.State.Width
 	height := t.State.Height
@@ -336,12 +382,19 @@ func (t *TUI) renderMain() string {
 		editorPanel,
 	)
 	
-	return lipgloss.JoinVertical(
+	out := lipgloss.JoinVertical(
 		lipgloss.Left,
 		mainContent,
 		statusBar,
 		helpBar,
 	)
+	// Cap to terminal height so the top is never cropped when terminal is small
+	lines := strings.Split(out, "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+		out = strings.Join(lines, "\n")
+	}
+	return out
 }
 
 // renderMainWithDialog renders main view with dialog overlay
@@ -405,9 +458,13 @@ func (t *TUI) renderExplorer(width, height int) string {
 	lines = append(lines, title)
 	lines = append(lines, strings.Repeat("─", width-2))
 	
-	// Calculate visible range
+	// Content area height (title + separator take 2 lines; borders take space)
+	contentHeight := height - 4
+	if contentHeight < 0 {
+		contentHeight = 0
+	}
 	startIdx := t.State.TreeScrollY
-	endIdx := startIdx + height - 4 // Account for title and borders
+	endIdx := startIdx + contentHeight
 	if endIdx > len(t.visibleNodes) {
 		endIdx = len(t.visibleNodes)
 	}
@@ -423,7 +480,11 @@ func (t *TUI) renderExplorer(width, height int) string {
 	}
 	
 	// Fill remaining space
-	for len(lines) < height-2 {
+	minLines := height - 2
+	if minLines < 2 {
+		minLines = 2
+	}
+	for len(lines) < minLines {
 		lines = append(lines, "")
 	}
 	
@@ -497,9 +558,12 @@ func (t *TUI) renderEditor(width, height int) string {
 	lines = append(lines, titleStyle.Render(" "+title+" "))
 	lines = append(lines, strings.Repeat("─", width-2))
 	
-	// Get visible lines
-	t.Editor.ScrollToCursor(height - 4)
-	visibleLines := t.Editor.GetVisibleLines(height - 4)
+	editorContentHeight := height - 4
+	if editorContentHeight < 1 {
+		editorContentHeight = 1
+	}
+	t.Editor.ScrollToCursor(editorContentHeight)
+	visibleLines := t.Editor.GetVisibleLines(editorContentHeight)
 	
 	lineNumWidth := 4
 	
