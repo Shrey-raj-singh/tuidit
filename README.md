@@ -36,6 +36,16 @@ A terminal UI based CLI code editor written in Go with modular code architecture
   sudo apt install tuidit
   ```
 
+- **DNF** (Fedora / RHEL / CentOS / Rocky) — Add the repo and install (after a release and with [GitHub Pages enabled](https://docs.github.com/en/pages)):
+  ```bash
+  echo '[tuidit]
+  name=tuidit
+  baseurl=https://shrey-raj-singh.github.io/tuidit/rpm/$basearch
+  enabled=1
+  gpgcheck=0' | sudo tee /etc/yum.repos.d/tuidit.repo
+  sudo dnf install tuidit
+  ```
+
 ### Build from source
 
 **Prerequisites:** Go 1.21 or higher.
