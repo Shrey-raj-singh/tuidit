@@ -146,6 +146,13 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return t, nil
 	case model.DirChangedMsg:
 		_ = t.FileTree.Refresh()
+		t.visibleNodes = t.FileTree.GetVisibleNodes()
+		if t.selectedIndex >= len(t.visibleNodes) && len(t.visibleNodes) > 0 {
+			t.selectedIndex = len(t.visibleNodes) - 1
+		}
+		if t.selectedIndex < 0 {
+			t.selectedIndex = 0
+		}
 		// Restart watcher so new subdirs are watched
 		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
 		return t, t.FileTree.WatchCmd()
