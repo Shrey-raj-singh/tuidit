@@ -107,6 +107,12 @@ Add the directory that contains the `tuidit` (or `tuidit.exe`) binary to your **
 
 - Same as PowerShell: add the folder containing `tuidit.exe` to the **Path** user variable via **Environment Variables**, then use a new `cmd` window and run `tuidit` from any directory.
 
+### Linux / WSL: file watcher (inotify and polling)
+
+The file explorer auto-refreshes when files change on disk. On Linux it uses inotify; if your project has many directories, you may hit the system limit (`fs.inotify.max_user_watches`, often 8192). Tuidit then watches only the root directory so refresh still works for top-level changes. For full tree watching on large projects, increase the limit (e.g. `echo 524288 | sudo tee /proc/sys/fs/inotify/max_user_watches` or set `fs.inotify.max_user_watches=524288` in `/etc/sysctl.conf` and run `sudo sysctl -p`).
+
+**WSL:** On Windows mounts (e.g. `/mnt/c/...`), inotify does not work. Tuidit falls back to polling the tree every 2 seconds, so the explorer still auto-refreshes when you add, remove, or change files from Windows or another terminal.
+
 ## Usage
 
 ### With no arguments

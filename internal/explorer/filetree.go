@@ -1,16 +1,22 @@
 package explorer
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/fsnotify/fsnotify"
 	"tuidit/internal/model"
 )
+
+// pollInterval is the interval for polling when inotify doesn't fire (e.g. WSL on /mnt/c).
+const pollInterval = 2 * time.Second
 
 // FileTree manages the file tree structure
 type FileTree struct {
@@ -260,8 +266,39 @@ func FileExists(path string) bool {
 	return err == nil
 }
 
+// treeSignature returns a string that changes when the tree under root changes (for polling fallback).
+func treeSignature(root string) string {
+	var count int64
+	var sum int64
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		count++
+		sum += info.ModTime().UnixNano()
+		return nil
+	})
+	return fmt.Sprintf("%d:%d", count, sum)
+}
+
+// isInotifyLimitError reports whether err is due to the Linux inotify watch limit (max_user_watches).
+func isInotifyLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ENOSPC) {
+		return true
+	}
+	// Fallback: kernel can report limit via message
+	s := err.Error()
+	return strings.Contains(s, "no space left") || strings.Contains(s, "max_user_watches") ||
+		strings.Contains(s, "inotify") && strings.Contains(s, "watch")
+}
+
 // StartWatch starts watching the tree root (and subdirs) for filesystem changes.
 // Sends on watchCh when a change is detected (debounced). Call StopWatch before starting a new watch.
+// On Linux, if the inotify watch limit (fs.inotify.max_user_watches) is reached, only the root directory is watched.
+// A polling fallback (every 2s) runs so that WSL on Windows mounts (/mnt/c) and similar setups still get auto-refresh.
 func (ft *FileTree) StartWatch(rootPath string) error {
 	if rootPath == "" {
 		return nil
@@ -274,20 +311,55 @@ func (ft *FileTree) StartWatch(rootPath string) error {
 	ft.watcher = watcher
 	ft.watchCh = make(chan struct{}, 1)
 
-	// Add root and all subdirs
-	_ = filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+	absRoot, _ := filepath.Abs(rootPath)
+	if absRoot == "" {
+		absRoot = rootPath
+	}
+
+	// Add root and all subdirs; on Linux ENOSPC (inotify limit) fall back to watching only root
+	_ = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
 			return nil
 		}
-		if info.IsDir() {
-			_ = watcher.Add(path)
+		if !info.IsDir() {
+			return nil
+		}
+		if addErr := watcher.Add(path); addErr != nil {
+			if isInotifyLimitError(addErr) {
+				_ = watcher.Close()
+				watcher, err = fsnotify.NewWatcher()
+				if err != nil {
+					return filepath.SkipAll
+				}
+				if addErr := watcher.Add(absRoot); addErr != nil {
+					_ = watcher.Close()
+					return filepath.SkipAll
+				}
+				ft.watcher = watcher
+				return filepath.SkipAll
+			}
 		}
 		return nil
 	})
 
+	watchCh := ft.watchCh // capture so we only close this goroutine's channel when it exits
 	go func() {
-		defer close(ft.watchCh)
+		defer close(watchCh)
 		var debounce *time.Timer
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+		lastSig := treeSignature(absRoot)
+		trigger := func() {
+			if debounce != nil {
+				debounce.Stop()
+			}
+			debounce = time.AfterFunc(150*time.Millisecond, func() {
+				select {
+				case watchCh <- struct{}{}:
+				default:
+				}
+			})
+		}
 		for {
 			select {
 			case event, ok := <-watcher.Events:
@@ -295,18 +367,16 @@ func (ft *FileTree) StartWatch(rootPath string) error {
 					return
 				}
 				_ = event
-				if debounce != nil {
-					debounce.Stop()
-				}
-				debounce = time.AfterFunc(150*time.Millisecond, func() {
-					select {
-					case ft.watchCh <- struct{}{}:
-					default:
-					}
-				})
+				trigger()
 			case _, ok := <-watcher.Errors:
 				if !ok {
 					return
+				}
+			case <-ticker.C:
+				// Polling fallback for WSL (/mnt/c) and other mounts where inotify doesn't fire
+				if sig := treeSignature(absRoot); sig != lastSig {
+					lastSig = sig
+					trigger()
 				}
 			}
 		}
