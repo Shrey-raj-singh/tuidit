@@ -22,11 +22,12 @@ Manifests live in this repo under `winget/`. To add a **new version** to the [Wi
    ```
 2. Copy the `winget/` folder and create a versioned directory in winget-pkgs:
    - In [winget-pkgs](https://github.com/microsoft/winget-pkgs): `manifests/s/ShreyRajSingh/Tuidit/<PackageVersion>/`
-   - Put the three YAML files there; in the **installer** file set:
+   - Put the three YAML files there: **version**, **locale.en-US**, and **installer**. In the **installer** file set:
      - `PackageVersion` to the new version (e.g. `1.0.0`)
      - `InstallerUrl` to `https://github.com/Shrey-raj-singh/tuidit/releases/download/v<version>/tuidit-windows-amd64.exe`
      - `InstallerSha256` to the value from step 1.
-   - In the **version** and **defaultLocale** files set `PackageVersion` to the same value.
+   - In the **version** and **locale.en-US** files set `PackageVersion` to the same value.
+   - File names must match winget rules: `ShreyRajSingh.Tuidit.version.yaml`, `ShreyRajSingh.Tuidit.locale.en-US.yaml`, `ShreyRajSingh.Tuidit.installer.yaml` (not `defaultLocale.yaml`).
 3. Validate and submit:
    ```powershell
    winget validate --manifest manifests\s\ShreyRajSingh\Tuidit\<version>\

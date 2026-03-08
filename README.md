@@ -26,10 +26,7 @@ A terminal UI based CLI code editor written in Go with modular code architecture
   brew install Shrey-raj-singh/tuidit/tuidit
   ```
 
-- **Winget** (Windows) — Once the package is in the [winget-pkgs](https://github.com/microsoft/winget-pkgs) repo:
-  ```powershell
-  winget install tuidit
-  ```
+- **Winget** (Windows) — *Not yet available.* The package must be submitted to the [winget-pkgs](https://github.com/microsoft/winget-pkgs) repo first. Until then, use the **GitHub Releases** download or **build from source** (see below).
 
 - **APT** (Debian/Ubuntu) — Add the repo and install (after a release and with [GitHub Pages enabled](https://docs.github.com/en/pages)):
   ```bash
