@@ -113,6 +113,9 @@ var (
 
 	gitStatusRenamedStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#39C5CF"))
+
+	gitIgnoredStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#4A5568"))
 )
 
 // TUI represents the main TUI application
@@ -569,6 +572,13 @@ func (t *TUI) renderTreeNode(node *model.TreeNode, selected bool, width int) str
 	text := indent + icon + " " + name
 	if len(text) > maxNameWidth && maxNameWidth > 3 {
 		text = text[:maxNameWidth-3] + "..."
+	}
+
+	if gs == gitutil.FileIgnored {
+		if selected {
+			return selectedStyle.Render(text)
+		}
+		return gitIgnoredStyle.Render(text)
 	}
 
 	if selected {

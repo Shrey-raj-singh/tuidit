@@ -27,6 +27,7 @@ const (
 	FileDeleted                   // deleted in worktree or index
 	FileRenamed                   // renamed
 	FileConflicted                // merge conflict
+	FileIgnored                   // listed in .gitignore
 )
 
 func gitAvailable() bool {
@@ -225,7 +226,42 @@ func GetRepoStatus(rootDir string) RepoFileStatus {
 		propagateToParents(result, rel, st)
 	}
 
+	addIgnoredPaths(result, root, absRoot)
+
 	return result
+}
+
+// addIgnoredPaths runs `git ls-files --others --ignored --exclude-standard --directory`
+// to find gitignored files/directories and marks them in the result map.
+func addIgnoredPaths(result RepoFileStatus, repoRoot, absRoot string) {
+	cmd := exec.Command("git", "ls-files", "--others", "--ignored", "--exclude-standard", "--directory")
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return
+	}
+
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		relPath := filepath.FromSlash(strings.TrimSuffix(line, "/"))
+		absPath := filepath.Join(repoRoot, relPath)
+
+		rel, err := filepath.Rel(absRoot, absPath)
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(rel, "..") {
+			continue
+		}
+
+		if _, exists := result[rel]; !exists {
+			result[rel] = FileIgnored
+		}
+	}
 }
 
 // StatusForPath looks up the status for an absolute path given the root directory.
