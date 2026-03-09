@@ -497,21 +497,22 @@ func (t *TUI) handleEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc":
 			t.State.Mode = model.ModeNormal
 			
-		case "ctrl+s":
-			if t.Editor.Buffer != nil {
-				if err := t.Editor.SaveFile(); err != nil {
-					t.State.StatusMessage = "Error saving: " + err.Error()
-				} else {
-					t.State.StatusMessage = "File saved"
-				}
-			}
-			
-		case "ctrl+q":
-			if t.Editor.IsModified() {
-				t.State.Dialog.Type = model.DialogQuit
+	case "ctrl+s":
+		if t.Editor.Buffer != nil {
+			if err := t.Editor.SaveFile(); err != nil {
+				t.State.StatusMessage = "Error saving: " + err.Error()
 			} else {
-				return t, tea.Quit
+				t.State.StatusMessage = "File saved"
+				t.refreshGitStatus()
 			}
+		}
+		
+	case "ctrl+q":
+		if t.Editor.IsModified() {
+			t.State.Dialog.Type = model.DialogQuit
+		} else {
+			return t, tea.Quit
+		}
 			
 		case "enter":
 			t.Editor.InsertNewline()
@@ -667,6 +668,7 @@ func (t *TUI) handleEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				t.State.StatusMessage = "Error saving: " + err.Error()
 			} else {
 				t.State.StatusMessage = "File saved"
+				t.refreshGitStatus()
 			}
 		}
 		
@@ -687,8 +689,6 @@ func (t *TUI) handleEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return t, tea.Quit
 		}
 		
-	case "ctrl+c":
-		return t, tea.Quit
 	}
 	
 	return t, nil
@@ -911,6 +911,7 @@ func (t *TUI) openDirectory(path string) (tea.Model, tea.Cmd) {
 	t.State.FocusPanel = model.PanelExplorer
 	_ = config.SaveLastWorkspace(expanded)
 	_ = t.FileTree.StartWatch(expanded)
+	t.refreshGitStatus()
 
 	return t, t.FileTree.WatchCmd()
 }

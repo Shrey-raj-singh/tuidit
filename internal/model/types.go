@@ -67,14 +67,15 @@ type Selection struct {
 
 // EditorBuffer represents an open file buffer
 type EditorBuffer struct {
-	File       *FileNode
-	Lines      []string
-	Cursor     Cursor
-	Selection  Selection
-	ScrollY    int
-	ScrollX    int
-	Modified   bool
-	FilePath   string
+	File         *FileNode
+	Lines        []string
+	Cursor       Cursor
+	Selection    Selection
+	ScrollY      int
+	ScrollX      int
+	Modified     bool
+	FilePath     string
+	GutterStatus []int // per-line git diff status (0=none, 1=added, 2=modified, 3=deleted)
 }
 
 // DialogType represents the type of dialog shown

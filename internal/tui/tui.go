@@ -14,6 +14,7 @@ import (
 	"tuidit/internal/config"
 	"tuidit/internal/editor"
 	"tuidit/internal/explorer"
+	gitutil "tuidit/internal/git"
 	"tuidit/internal/model"
 	"tuidit/internal/utils"
 )
@@ -85,6 +86,33 @@ var (
 	previewSelectedStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#1E1E2E")).
 			Background(lipgloss.Color("#7C3AED"))
+
+	gutterAddedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#3FB950"))
+
+	gutterModifiedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#E3B341"))
+
+	gutterDeletedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F85149"))
+
+	gitStatusModifiedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#E3B341"))
+
+	gitStatusAddedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#3FB950"))
+
+	gitStatusUntrackedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F0883E"))
+
+	gitStatusDeletedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F85149"))
+
+	gitStatusConflictStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F472B6"))
+
+	gitStatusRenamedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#39C5CF"))
 )
 
 // TUI represents the main TUI application
@@ -114,6 +142,9 @@ type TUI struct {
 	lastClickX     int
 	lastClickY     int
 	lastClickPanel int // 0=none, 1=explorer, 2=editor
+
+	// Git status cache for explorer
+	gitStatus gitutil.RepoFileStatus
 }
 
 // NewTUI creates a new TUI application
@@ -124,6 +155,14 @@ func NewTUI() *TUI {
 		FileTree:  explorer.NewFileTree(),
 		Editor:    editor.NewEditor(),
 		FileOps:   utils.NewFileOperations(),
+	}
+}
+
+func (t *TUI) refreshGitStatus() {
+	if t.FileTree.RootPath != "" {
+		t.gitStatus = gitutil.GetRepoStatus(t.FileTree.RootPath)
+	} else {
+		t.gitStatus = nil
 	}
 }
 
@@ -153,6 +192,7 @@ func (t *TUI) Init() tea.Cmd {
 
 	if t.FileTree.RootPath != "" {
 		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
+		t.refreshGitStatus()
 		cmds = append(cmds, t.FileTree.WatchCmd())
 	}
 	return tea.Sequence(cmds...)
@@ -205,6 +245,7 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.selectedIndex < 0 {
 			t.selectedIndex = 0
 		}
+		t.refreshGitStatus()
 		return t, t.FileTree.WatchCmd()
 	// Size poll tick: read terminal size so resize is reflected (terminals that don't send WindowSizeMsg, e.g. Windows CMD)
 	case time.Time:
@@ -500,9 +541,9 @@ func (t *TUI) renderExplorer(width, height int) string {
 func (t *TUI) renderTreeNode(node *model.TreeNode, selected bool, width int) string {
 	depth := explorer.GetNodeDepth(node)
 	indent := strings.Repeat("  ", depth)
-	
+
 	var icon, name string
-	
+
 	switch node.Type {
 	case model.FileTypeDirectory:
 		if node.Expanded {
@@ -515,23 +556,78 @@ func (t *TUI) renderTreeNode(node *model.TreeNode, selected bool, width int) str
 		icon = " "
 		name = node.Name
 	}
-	
+
+	gs := gitutil.StatusForPath(t.gitStatus, t.FileTree.RootPath, node.Path)
+	label := gitutil.StatusLabel(gs)
+
+	// Reserve 2 chars for " M" suffix when git status is present
+	maxNameWidth := width
+	if label != "" {
+		maxNameWidth = width - 2
+	}
+
 	text := indent + icon + " " + name
-	
-	// Truncate if too long
-	if len(text) > width {
-		text = text[:width-3] + "..."
+	if len(text) > maxNameWidth && maxNameWidth > 3 {
+		text = text[:maxNameWidth-3] + "..."
 	}
-	
+
 	if selected {
-		return selectedStyle.Render(text)
+		rendered := selectedStyle.Render(text)
+		if label != "" {
+			rendered += " " + t.styledGitLabel(gs, label)
+		}
+		return rendered
 	}
-	
+
 	if node.Type == model.FileTypeDirectory {
+		if gs != gitutil.FileClean {
+			return dirStyle.Render(text) + " " + t.styledGitLabel(gs, label)
+		}
 		return dirStyle.Render(text)
 	}
-	
+
+	if gs != gitutil.FileClean {
+		styledName := t.gitFileStyle(gs).Render(text)
+		return styledName + " " + t.styledGitLabel(gs, label)
+	}
+
 	return fileStyle.Render(text)
+}
+
+func (t *TUI) styledGitLabel(gs gitutil.FileGitStatus, label string) string {
+	switch gs {
+	case gitutil.FileModified:
+		return gitStatusModifiedStyle.Render(label)
+	case gitutil.FileAdded:
+		return gitStatusAddedStyle.Render(label)
+	case gitutil.FileUntracked:
+		return gitStatusUntrackedStyle.Render(label)
+	case gitutil.FileDeleted:
+		return gitStatusDeletedStyle.Render(label)
+	case gitutil.FileConflicted:
+		return gitStatusConflictStyle.Render(label)
+	case gitutil.FileRenamed:
+		return gitStatusRenamedStyle.Render(label)
+	}
+	return label
+}
+
+func (t *TUI) gitFileStyle(gs gitutil.FileGitStatus) lipgloss.Style {
+	switch gs {
+	case gitutil.FileModified:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#E3B341"))
+	case gitutil.FileAdded:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#3FB950"))
+	case gitutil.FileUntracked:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#F0883E"))
+	case gitutil.FileDeleted:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#F85149"))
+	case gitutil.FileConflicted:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#F472B6"))
+	case gitutil.FileRenamed:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#39C5CF"))
+	}
+	return fileStyle
 }
 
 // renderEditor renders the editor panel
@@ -564,33 +660,50 @@ func (t *TUI) renderEditor(width, height int) string {
 	visibleLines := t.Editor.GetVisibleLines(editorContentHeight)
 	
 	lineNumWidth := 4
-	
+	hasGutter := len(t.Editor.Buffer.GutterStatus) > 0
+	gutterWidth := 0
+	if hasGutter {
+		gutterWidth = 1
+	}
+
 	for i, line := range visibleLines {
 		lineNum := t.Editor.Buffer.ScrollY + i + 1
 		lineNumStr := fmt.Sprintf("%*d ", lineNumWidth-1, lineNum)
-		
-		// Highlight current line
+		absLine := t.Editor.Buffer.ScrollY + i
+
 		cursorLine := t.Editor.Buffer.Cursor.Line
-		isCurrentLine := (t.Editor.Buffer.ScrollY + i) == cursorLine
-		
-		// Render line number
+		isCurrentLine := absLine == cursorLine
+
 		renderedLine := lineNumStyle.Render(lineNumStr)
-		
-		// Render content with cursor
+
+		gutterChar := ""
+		if hasGutter {
+			gutterChar = " "
+			if absLine < len(t.Editor.Buffer.GutterStatus) {
+				switch gitutil.LineStatus(t.Editor.Buffer.GutterStatus[absLine]) {
+				case gitutil.StatusAdded:
+					gutterChar = gutterAddedStyle.Render("│")
+				case gitutil.StatusModified:
+					gutterChar = gutterModifiedStyle.Render("│")
+				case gitutil.StatusDeleted:
+					gutterChar = gutterDeletedStyle.Render("─")
+				}
+			}
+		}
+
 		showCursor := isCurrentLine
 		cursorPos := t.Editor.Buffer.Cursor.Column
-		content := t.renderLineContent(line, width-lineNumWidth-2, showCursor, cursorPos)
-		
+		content := t.renderLineContent(line, width-lineNumWidth-gutterWidth-2, showCursor, cursorPos)
+
 		if isCurrentLine && t.State.FocusPanel == model.PanelEditor {
-			// Highlight current line background
 			if t.State.Mode == model.ModeInsert {
 				content = lipgloss.NewStyle().Background(lipgloss.Color("#2D3748")).Render(content)
 			} else {
 				content = lipgloss.NewStyle().Background(lipgloss.Color("#1E3A5F")).Render(content)
 			}
 		}
-		
-		lines = append(lines, renderedLine+content)
+
+		lines = append(lines, renderedLine+gutterChar+content)
 	}
 	
 	// Fill remaining space
