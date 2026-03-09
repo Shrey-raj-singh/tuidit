@@ -86,11 +86,6 @@ func (ft *FileTree) loadChildren(node *model.TreeNode) error {
 	})
 	
 	for _, entry := range entries {
-		// Skip hidden files
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		
 		childPath := filepath.Join(node.Path, entry.Name())
 		childType := model.FileTypeFile
 		if entry.IsDir() {
@@ -162,30 +157,39 @@ func (ft *FileTree) RefreshNode(node *model.TreeNode) error {
 	if node.Type != model.FileTypeDirectory {
 		return nil
 	}
-	
-	// Save expansion state of existing children
-	expandedStates := make(map[string]bool)
-	for _, child := range node.Children {
-		expandedStates[child.Path] = child.Expanded
+
+	// Collect ALL expanded paths in the entire subtree before reloading
+	expandedPaths := make(map[string]bool)
+	var collectExpanded func(n *model.TreeNode)
+	collectExpanded = func(n *model.TreeNode) {
+		if n.Type == model.FileTypeDirectory && n.Expanded {
+			expandedPaths[n.Path] = true
+		}
+		for _, child := range n.Children {
+			collectExpanded(child)
+		}
 	}
-	
+	collectExpanded(node)
+
 	node.IsLoaded = false
 	node.Children = nil
 	if err := ft.loadChildren(node); err != nil {
 		return err
 	}
-	
-	// Restore expansion state for new children
-	for _, child := range node.Children {
-		if expanded, ok := expandedStates[child.Path]; ok {
-			child.Expanded = expanded
-			// If child was expanded and is a directory, refresh its children too
-			if child.Expanded && child.Type == model.FileTypeDirectory {
-				ft.RefreshNode(child)
+
+	// Restore expansion state at every level
+	var restoreExpanded func(n *model.TreeNode)
+	restoreExpanded = func(n *model.TreeNode) {
+		for _, child := range n.Children {
+			if child.Type == model.FileTypeDirectory && expandedPaths[child.Path] {
+				child.Expanded = true
+				ft.loadChildren(child)
+				restoreExpanded(child)
 			}
 		}
 	}
-	
+	restoreExpanded(node)
+
 	return nil
 }
 
@@ -266,6 +270,19 @@ func FileExists(path string) bool {
 	return err == nil
 }
 
+// shouldSkipDir returns true for directories that should not be recursively walked
+// (hidden dirs, dependency caches, build artifacts). Keeps walks fast on large projects.
+func shouldSkipDir(name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	switch name {
+	case "node_modules", "vendor", "__pycache__", "dist", "build", "target", "out", "bin", "obj":
+		return true
+	}
+	return false
+}
+
 // treeSignature returns a string that changes when the tree under root changes (for polling fallback).
 func treeSignature(root string) string {
 	var count int64
@@ -273,6 +290,9 @@ func treeSignature(root string) string {
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil {
 			return nil
+		}
+		if info.IsDir() && path != root && shouldSkipDir(info.Name()) {
+			return filepath.SkipDir
 		}
 		count++
 		sum += info.ModTime().UnixNano()
@@ -316,35 +336,41 @@ func (ft *FileTree) StartWatch(rootPath string) error {
 		absRoot = rootPath
 	}
 
-	// Add root and all subdirs; on Linux ENOSPC (inotify limit) fall back to watching only root
-	_ = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil {
-			return nil
-		}
-		if !info.IsDir() {
-			return nil
-		}
-		if addErr := watcher.Add(path); addErr != nil {
-			if isInotifyLimitError(addErr) {
-				_ = watcher.Close()
-				watcher, err = fsnotify.NewWatcher()
-				if err != nil {
-					return filepath.SkipAll
-				}
-				if addErr := watcher.Add(absRoot); addErr != nil {
-					_ = watcher.Close()
-					return filepath.SkipAll
-				}
-				ft.watcher = watcher
-				return filepath.SkipAll
-			}
-		}
-		return nil
-	})
+	if err := watcher.Add(absRoot); err != nil {
+		watcher.Close()
+		ft.watcher = nil
+		ft.watchCh = nil
+		return err
+	}
 
-	watchCh := ft.watchCh // capture so we only close this goroutine's channel when it exits
+	watchCh := ft.watchCh
 	go func() {
 		defer close(watchCh)
+
+		// Add subdirectories in the background so the UI is never blocked.
+		go func() {
+			_ = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
+				if err != nil || info == nil {
+					return nil
+				}
+				if !info.IsDir() {
+					return nil
+				}
+				if path == absRoot {
+					return nil
+				}
+				if shouldSkipDir(info.Name()) {
+					return filepath.SkipDir
+				}
+				if addErr := watcher.Add(path); addErr != nil {
+					if isInotifyLimitError(addErr) {
+						return filepath.SkipAll
+					}
+				}
+				return nil
+			})
+		}()
+
 		var debounce *time.Timer
 		ticker := time.NewTicker(pollInterval)
 		defer ticker.Stop()
@@ -373,7 +399,6 @@ func (ft *FileTree) StartWatch(rootPath string) error {
 					return
 				}
 			case <-ticker.C:
-				// Polling fallback for WSL (/mnt/c) and other mounts where inotify doesn't fire
 				if sig := treeSignature(absRoot); sig != lastSig {
 					lastSig = sig
 					trigger()

@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
-	
+
+	gitutil "tuidit/internal/git"
 	"tuidit/internal/model"
 )
 
@@ -34,7 +35,6 @@ func (e *Editor) OpenFile(path string) error {
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Create new empty buffer
 			e.Buffer = &model.EditorBuffer{
 				File: &model.FileNode{
 					Path:     absPath,
@@ -46,6 +46,7 @@ func (e *Editor) OpenFile(path string) error {
 				Cursor:   model.Cursor{Line: 0, Column: 0},
 				FilePath: absPath,
 			}
+			e.refreshGutter()
 			return nil
 		}
 		return err
@@ -88,6 +89,7 @@ func (e *Editor) OpenFile(path string) error {
 		Cursor:   model.Cursor{Line: 0, Column: 0},
 		FilePath: absPath,
 	}
+	e.refreshGutter()
 
 	return nil
 }
@@ -118,7 +120,23 @@ func (e *Editor) SaveFile() error {
 
 	e.Buffer.Modified = false
 	e.Buffer.File.Modified = false
+	e.refreshGutter()
 	return nil
+}
+
+// refreshGutter computes git diff gutter status for the current buffer.
+// Silently does nothing if git is unavailable or the file is not in a repo.
+func (e *Editor) refreshGutter() {
+	if e.Buffer == nil || e.Buffer.FilePath == "" {
+		return
+	}
+	gutter := gitutil.GetFileGutter(e.Buffer.FilePath, len(e.Buffer.Lines))
+	if gutter != nil {
+		e.Buffer.GutterStatus = make([]int, len(gutter))
+		for i, s := range gutter {
+			e.Buffer.GutterStatus[i] = int(s)
+		}
+	}
 }
 
 // SaveFileAs saves the current buffer to a new path
