@@ -82,6 +82,7 @@ func main() {
 		app,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
+		tea.WithoutSignalHandler(),
 	)
 	
 	if _, err := p.Run(); err != nil {

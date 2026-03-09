@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -142,13 +143,19 @@ const sizePollInterval = 100 * time.Millisecond
 
 // Init initializes the TUI
 func (t *TUI) Init() tea.Cmd {
-	// Get size once at start and start polling so height/width update when user resizes (Windows CMD often doesn't send resize events)
-	sizeTick := tea.Tick(sizePollInterval, func(t time.Time) tea.Msg { return t })
+	cmds := []tea.Cmd{tea.EnterAltScreen, getSizeCmd()}
+
+	// Windows CMD/PowerShell often don't send SIGWINCH, so poll terminal size there.
+	// Linux/macOS terminals handle resize natively via SIGWINCH — polling there causes flicker.
+	if runtime.GOOS == "windows" {
+		cmds = append(cmds, tea.Tick(sizePollInterval, func(t time.Time) tea.Msg { return t }))
+	}
+
 	if t.FileTree.RootPath != "" {
 		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
-		return tea.Sequence(tea.EnterAltScreen, getSizeCmd(), sizeTick, t.FileTree.WatchCmd())
+		cmds = append(cmds, t.FileTree.WatchCmd())
 	}
-	return tea.Sequence(tea.EnterAltScreen, getSizeCmd(), sizeTick)
+	return tea.Sequence(cmds...)
 }
 
 // Update handles updates
@@ -159,6 +166,9 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return t.handleMouse(msg)
 	case tea.WindowSizeMsg:
+		if msg.Width == t.State.Width && msg.Height == t.State.Height {
+			return t, nil
+		}
 		t.State.Width = msg.Width
 		t.State.Height = msg.Height
 		// Keep explorer selection in view when height shrinks
@@ -195,8 +205,6 @@ func (t *TUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if t.selectedIndex < 0 {
 			t.selectedIndex = 0
 		}
-		// Restart watcher so new subdirs are watched
-		_ = t.FileTree.StartWatch(t.FileTree.RootPath)
 		return t, t.FileTree.WatchCmd()
 	// Size poll tick: read terminal size so resize is reflected (terminals that don't send WindowSizeMsg, e.g. Windows CMD)
 	case time.Time:
@@ -400,40 +408,30 @@ func (t *TUI) renderMain() string {
 // renderMainWithDialog renders main view with dialog overlay
 func (t *TUI) renderMainWithDialog() string {
 	mainView := t.renderMain()
-	
+
 	dialog := t.renderDialog()
-	
-	// Overlay dialog on main view
+
 	lines := strings.Split(mainView, "\n")
 	dialogLines := strings.Split(dialog, "\n")
-	
+
 	startRow := (len(lines) - len(dialogLines)) / 2
 	if startRow < 0 {
 		startRow = 0
 	}
-	
+
 	for i, dl := range dialogLines {
-		if startRow+i < len(lines) {
-			// Center the dialog line
-			startCol := (t.State.Width - len(dl)) / 2
-			if startCol < 0 {
-				startCol = 0
-			}
-			
-			// Clear the line area and place dialog
-			line := lines[startRow+i]
-			if startCol < len(line) {
-				endCol := startCol + len(dl)
-				if endCol > len(line) {
-					endCol = len(line)
-				}
-				lines[startRow+i] = line[:startCol] + dl + line[endCol:]
-			} else {
-				lines[startRow+i] = line + strings.Repeat(" ", startCol-len(line)) + dl
-			}
+		row := startRow + i
+		if row >= len(lines) {
+			break
 		}
+		visualW := lipgloss.Width(dl)
+		padLeft := (t.State.Width - visualW) / 2
+		if padLeft < 0 {
+			padLeft = 0
+		}
+		lines[row] = strings.Repeat(" ", padLeft) + dl
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -683,7 +681,7 @@ func (t *TUI) renderHelpBar(width int) string {
 	help := ""
 	
 	if t.State.FocusPanel == model.PanelExplorer {
-		help = "Enter: Open/Expand | n/N: New | F2: Rename | Del | Ctrl+X/C/V | Ctrl+←→: Resize | Ctrl+H: Guide | Tab: Editor | Esc/Ctrl+Q: Quit"
+		help = "Enter: Open/Expand | n/N: New | F2: Rename | Del | x/y/p: Cut/Copy/Paste | Ctrl+←→: Resize | Ctrl+H: Guide | Tab: Editor | Esc/Ctrl+Q: Quit"
 	} else if t.State.FocusPanel == model.PanelEditor {
 		if t.State.Mode == model.ModeInsert {
 			help = "Esc: Normal | Ctrl+S: Save | Ctrl+H: Guide | Ctrl+Q: Quit"
@@ -714,7 +712,7 @@ func (t *TUI) renderHelpGuide() string {
 		"  " + keyStyle.Render("← h  → l") + "  Collapse / Expand",
 		"  " + keyStyle.Render("n  N") + "  New file / folder",
 		"  " + keyStyle.Render("F2") + "  Rename  " + keyStyle.Render("Del d") + "  Delete",
-		"  " + keyStyle.Render("Ctrl+X C V") + "  Cut / Copy / Paste",
+		"  " + keyStyle.Render("x") + " / " + keyStyle.Render("y") + " / " + keyStyle.Render("p") + "  Cut / Copy / Paste",
 		"  " + keyStyle.Render("Ctrl+O") + "  Open  " + keyStyle.Render("Tab") + "  Focus editor  " + keyStyle.Render("r") + "  Refresh",
 		"  " + keyStyle.Render("Ctrl+←") + " / " + keyStyle.Render("Ctrl+→") + "  Resize explorer panel",
 		"  " + keyStyle.Render("Esc") + "  or  " + keyStyle.Render("Ctrl+Q") + "  Quit",
@@ -940,5 +938,12 @@ func (t *TUI) renderDialog() string {
 		content += "\n\n[Enter: Confirm] [Tab: Complete] [↑↓: Navigate] [Esc: Cancel]"
 	}
 	
-	return dialogBoxStyle.Render(content)
+	maxW := t.State.Width - 4
+	if maxW > 70 {
+		maxW = 70
+	}
+	if maxW < 40 {
+		maxW = 40
+	}
+	return dialogBoxStyle.MaxWidth(maxW).Render(content)
 }
