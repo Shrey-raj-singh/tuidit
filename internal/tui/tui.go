@@ -927,7 +927,7 @@ func (t *TUI) renderDialog() string {
 			
 			for i := startIdx; i < endIdx; i++ {
 				path := t.State.Dialog.Preview[i]
-				name := filepath.Base(path)
+				name := path
 				isDir := t.FileOps.IsDirectory(path)
 				
 				prefix := "  "
@@ -935,7 +935,7 @@ func (t *TUI) renderDialog() string {
 					prefix = "> "
 				}
 				
-				if isDir {
+				if isDir && !strings.HasSuffix(name, "/") {
 					name += "/"
 				}
 				
