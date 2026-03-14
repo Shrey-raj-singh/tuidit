@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -188,6 +190,21 @@ func (t *TUI) updateDialogPreview() {
 			dirPath = filepath.Dir(expanded)
 			filterPrefix = filepath.Base(expanded)
 		}
+	}
+	
+	// Special handling for Windows root to show drives
+	if runtime.GOOS == "windows" && t.dialogInput == "" {
+		var results []string
+		for r := 'A'; r <= 'Z'; r++ {
+			drive := fmt.Sprintf("%c:/", r)
+
+			if _, err := os.Stat(drive); err == nil {
+				results = append(results, drive)
+			}
+		}
+		t.State.Dialog.Preview = results
+		t.State.Dialog.PreviewIdx = 0
+		return
 	}
 	
 	// Read directory contents
